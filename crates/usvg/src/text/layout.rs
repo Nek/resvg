@@ -26,6 +26,10 @@ use crate::{
 /// transform to the outline of the glyphs is all that is necessary to display it correctly.
 #[derive(Clone, Debug)]
 pub struct PositionedGlyph {
+    /// Index in the parent Text::chunks().
+    pub chunk_index: usize,
+    /// UTF-8 cluster range in the normalized TextChunk::text().
+    pub source_range: std::ops::Range<usize>,
     /// Returns the transform of the glyph itself within the cluster. For example,
     /// for zalgo text, it contains the transform to position the glyphs above/below
     /// the main glyph.
@@ -220,7 +224,7 @@ pub(crate) fn layout_text(
     let mut last_x = 0.0;
     let mut last_y = 0.0;
     let mut bbox = BBox::default();
-    for chunk in &text_node.chunks {
+    for (chunk_index, chunk) in text_node.chunks.iter().enumerate() {
         let (x, y) = match chunk.text_flow {
             TextFlow::Linear => (chunk.x.unwrap_or(last_x), chunk.y.unwrap_or(last_y)),
             TextFlow::Path(_) => (0.0, 0.0),
@@ -342,6 +346,7 @@ pub(crate) fn layout_text(
                         gc.glyphs.iter_mut().for_each(|pg| {
                             pg.cluster_ts = cluster_ts;
                             pg.span_ts = span_ts;
+                            pg.chunk_index = chunk_index;
                         });
                         gc.glyphs
                     })
@@ -1148,6 +1153,9 @@ fn form_glyph_clusters(glyphs: &[Glyph], text: &str, font_size: f32) -> GlyphClu
     let mut x: f32 = 0.0;
 
     let mut positioned_glyphs = vec![];
+    let source_start = glyphs[0].byte_idx.value();
+    let source_range =
+        source_start..source_start + glyphs.iter().map(|g| g.text.len()).max().unwrap_or(0);
 
     for glyph in glyphs {
         let sx = glyph.font.scale(font_size);
@@ -1161,6 +1169,8 @@ fn form_glyph_clusters(glyphs: &[Glyph], text: &str, font_size: f32) -> GlyphClu
         let ts = Transform::from_translate(x + glyph.dx as f32, -glyph.dy as f32);
 
         positioned_glyphs.push(PositionedGlyph {
+            chunk_index: 0,
+            source_range: source_range.clone(),
             glyph_ts: ts,
             // Will be set later.
             cluster_ts: Transform::default(),

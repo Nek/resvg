@@ -25,6 +25,7 @@ impl<'input> Document<'input> {
     pub(crate) fn append(&mut self, parent_id: NodeId, kind: NodeKind) -> NodeId {
         let new_child_id = NodeId::from(self.nodes.len());
         self.nodes.push(NodeData {
+            source_range: None,
             parent: Some(parent_id),
             next_sibling: None,
             children: None,
@@ -84,6 +85,7 @@ fn parse<'input>(
 
     // Add a root node.
     doc.nodes.push(NodeData {
+        source_range: None,
         parent: None,
         next_sibling: None,
         children: None,

@@ -280,6 +280,11 @@ fn collect_text_chunks_impl(
         let visibility: Visibility = parent.find_attribute(AId::Visibility).unwrap_or_default();
 
         let span = TextSpan {
+            source: child.source_range().map(|xml_range| crate::TextSpanSource {
+                xml_range,
+                text: Arc::from(child.text()),
+                range: 0..0,
+            }),
             start: 0,
             end: 0,
             fill: style::resolve_fill(parent, true, state, cache),
@@ -304,7 +309,7 @@ fn collect_text_chunks_impl(
         };
 
         let mut is_new_span = true;
-        for c in child.text().chars() {
+        for (source_start, c) in child.text().char_indices() {
             let char_len = c.len_utf8();
 
             // Create a new chunk if:
@@ -325,6 +330,9 @@ fn collect_text_chunks_impl(
                 let mut span2 = span.clone();
                 span2.start = 0;
                 span2.end = char_len;
+                if let Some(source) = &mut span2.source {
+                    source.range = source_start..source_start + char_len;
+                }
 
                 iter_state.chunks.push(TextChunk {
                     x: pos_list[iter_state.chars_count].x,
@@ -339,6 +347,9 @@ fn collect_text_chunks_impl(
                 let mut span2 = span.clone();
                 span2.start = iter_state.chunk_bytes_count;
                 span2.end = iter_state.chunk_bytes_count + char_len;
+                if let Some(source) = &mut span2.source {
+                    source.range = source_start..source_start + char_len;
+                }
 
                 if let Some(chunk) = iter_state.chunks.last_mut() {
                     chunk.text.push(c);
@@ -351,6 +362,9 @@ fn collect_text_chunks_impl(
                     if let Some(span) = chunk.spans.last_mut() {
                         debug_assert_ne!(span.end, 0);
                         span.end += char_len;
+                        if let Some(source) = &mut span.source {
+                            source.range.end += char_len;
+                        }
                     }
                 }
             }

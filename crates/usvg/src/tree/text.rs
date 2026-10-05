@@ -324,11 +324,23 @@ impl TextDecoration {
     }
 }
 
+/// Origin of a normalized SVG text span.
+#[derive(Clone, Debug)]
+pub struct TextSpanSource {
+    /// UTF-8 byte range of the original XML text node in the input SVG.
+    pub xml_range: std::ops::Range<usize>,
+    /// Text after SVG whitespace normalization.
+    pub text: Arc<str>,
+    /// UTF-8 byte range in `text` contributing to this span.
+    pub range: std::ops::Range<usize>,
+}
+
 /// A text style span.
 ///
 /// Spans do not overlap inside a text chunk.
 #[derive(Clone, Debug)]
 pub struct TextSpan {
+    pub(crate) source: Option<TextSpanSource>,
     pub(crate) start: usize,
     pub(crate) end: usize,
     pub(crate) fill: Option<Fill>,
@@ -351,6 +363,12 @@ pub struct TextSpan {
 }
 
 impl TextSpan {
+    /// Original XML node and normalized range, when this is direct text.
+    /// Synthesized text such as a `tref` expansion has no single source node.
+    pub fn source(&self) -> Option<&TextSpanSource> {
+        self.source.as_ref()
+    }
+
     /// A span start in bytes.
     ///
     /// Offset is relative to the parent text chunk and not the parent text element.

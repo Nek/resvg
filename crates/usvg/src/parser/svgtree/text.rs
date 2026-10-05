@@ -47,7 +47,8 @@ fn parse_svg_text_element_impl<'input>(
     for node in parent.children() {
         if node.is_text() {
             let text = trim_text(node.text().unwrap(), space);
-            doc.append(parent_id, NodeKind::Text(text));
+            let id = doc.append(parent_id, NodeKind::Text(text));
+            doc.nodes[id.get_usize()].source_range = Some(node.range());
             continue;
         }
 

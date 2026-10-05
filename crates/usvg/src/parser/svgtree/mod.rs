@@ -191,6 +191,7 @@ pub(crate) enum NodeKind {
 }
 
 struct NodeData {
+    source_range: Option<std::ops::Range<usize>>,
     parent: Option<NodeId>,
     next_sibling: Option<NodeId>,
     children: Option<(NodeId, NodeId)>,
@@ -251,6 +252,11 @@ impl<'a, 'input: 'a> SvgNode<'a, 'input> {
     #[inline]
     pub fn is_text(&self) -> bool {
         matches!(self.d.kind, NodeKind::Text(_))
+    }
+
+    #[cfg(feature = "text")]
+    pub fn source_range(&self) -> Option<std::ops::Range<usize>> {
+        self.d.source_range.clone()
     }
 
     /// Returns node's document.
