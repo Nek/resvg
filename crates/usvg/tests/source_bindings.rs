@@ -115,3 +115,40 @@ fn resolved_fonts_bind_to_original_occurrences_without_matching_text() {
         "exercise logical ranges in visual RTL order"
     );
 }
+
+#[test]
+fn fallback_preserves_clusters_when_fonts_produce_different_glyph_counts() {
+    let mut fonts = usvg::fontdb::Database::new();
+    fonts.load_fonts_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/../resvg/tests/fonts"));
+    let options = Options {
+        fontdb: Arc::new(fonts),
+        ..Default::default()
+    };
+    for source in ["office 漢 لا", "ffi e\u{301} 漢 العربية", "لا 漢 office"] {
+        let svg = format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="500" height="100"><text x="20" y="30" font-family="Noto Sans">{source}</text></svg>"#
+        );
+        let tree = Tree::from_str(&svg, &options).unwrap();
+        let Node::Text(text) = &tree.root().children()[0] else {
+            panic!("text");
+        };
+        let mut covered = std::collections::BTreeSet::new();
+        for glyph in text
+            .layouted()
+            .iter()
+            .flat_map(|span| &span.positioned_glyphs)
+        {
+            assert_ne!(glyph.id.0, 0, "unresolved glyph in {source}: {glyph:?}");
+            let run = &text.chunks()[glyph.chunk_index].text()[glyph.source_range.clone()];
+            covered.extend(
+                run.char_indices()
+                    .map(|(offset, _)| glyph.source_range.start + offset),
+            );
+        }
+        assert_eq!(
+            covered,
+            source.char_indices().map(|(offset, _)| offset).collect(),
+            "fallback must retain every source cluster"
+        );
+    }
+}

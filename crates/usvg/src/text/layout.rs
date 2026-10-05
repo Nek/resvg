@@ -1364,20 +1364,36 @@ pub(crate) fn shape_text(
                 break 'outer;
             }
 
-            // We assume, that shaping with an any font will produce the same amount of glyphs.
-            // This is incorrect, but good enough for now.
-            if glyphs.len() != fallback_glyphs.len() {
-                break 'outer;
+            // Fonts need not produce the same glyph count or cluster boundaries. Replace
+            // whole source intervals whose boundaries occur in both shaped runs; otherwise
+            // a ligature or combining cluster could be cut apart or copied twice.
+            let starts = |run: &[Glyph]| {
+                run.iter()
+                    .map(|glyph| glyph.byte_idx.value())
+                    .collect::<std::collections::BTreeSet<_>>()
+            };
+            let common: Vec<_> = starts(&glyphs)
+                .intersection(&starts(&fallback_glyphs))
+                .copied()
+                .collect();
+            let interval =
+                |glyph: &Glyph| common.partition_point(|start| *start <= glyph.byte_idx.value());
+            let mut candidates = std::collections::BTreeMap::<_, Vec<Glyph>>::new();
+            for glyph in fallback_glyphs {
+                candidates.entry(interval(&glyph)).or_default().push(glyph);
             }
-
-            // TODO: Replace clusters and not glyphs. This should be more accurate.
-
-            // Copy new glyphs.
-            for i in 0..glyphs.len() {
-                if glyphs[i].is_missing() && !fallback_glyphs[i].is_missing() {
-                    glyphs[i] = fallback_glyphs[i].clone();
+            let mut merged = Vec::with_capacity(glyphs.len());
+            for original in glyphs.chunk_by(|a, b| interval(a) == interval(b)) {
+                let candidate = candidates.get(&interval(&original[0]));
+                if original.iter().any(Glyph::is_missing)
+                    && candidate.is_some_and(|run| run.iter().all(|g| !g.is_missing()))
+                {
+                    merged.extend_from_slice(candidate.unwrap());
+                } else {
+                    merged.extend_from_slice(original);
                 }
             }
+            glyphs = merged;
 
             // Remember this font.
             used_fonts.push(fallback_font.id);
