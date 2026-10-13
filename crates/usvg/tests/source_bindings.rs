@@ -8,6 +8,90 @@ use std::sync::Arc;
 use usvg::{Node, Options, Tree};
 
 #[test]
+fn computed_fonts_preserve_source_ranges_and_resolve_relative_units() {
+    let mut fonts = usvg::fontdb::Database::new();
+    fonts.load_fonts_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/../resvg/tests/fonts"));
+    let source = r#"<svg xmlns="http://www.w3.org/2000/svg" width="500" height="100"><text x="1em" y="2em" style="font-size:0!important;font-family:missing!important">repeat<tspan font-size="50%">repeat</tspan></text></svg>"#;
+    let xml = roxmltree::Document::parse(source).unwrap();
+    let owner = xml.descendants().find(|n| n.has_tag_name("text")).unwrap();
+    let mut options = Options {
+        fontdb: Arc::new(fonts),
+        ..Default::default()
+    };
+    let plain = Tree::from_str(source, &options).unwrap();
+    assert!(
+        plain.root().children().is_empty(),
+        "zero-size text stays hidden without overrides"
+    );
+    options.computed_fonts.insert(
+        owner.range().start,
+        usvg::ComputedFontStyle {
+            font_family: Some("Noto Sans".into()),
+            font_size: Some("32px".into()),
+            font_weight: Some("700".into()),
+            font_style: Some("italic".into()),
+        },
+    );
+    let tree = Tree::from_str(source, &options).unwrap();
+    let Node::Text(text) = &tree.root().children()[0] else {
+        panic!("text")
+    };
+    let chunk = &text.chunks()[0];
+    assert_eq!(chunk.x(), Some(32.0));
+    assert_eq!(chunk.y(), Some(64.0));
+    assert_eq!(
+        chunk
+            .spans()
+            .iter()
+            .map(|s| s.font_size().get())
+            .collect::<Vec<_>>(),
+        [32.0, 16.0]
+    );
+    let origins: Vec<_> = xml
+        .descendants()
+        .filter(|n| n.is_text())
+        .map(|n| n.range())
+        .collect();
+    assert_eq!(
+        chunk
+            .spans()
+            .iter()
+            .map(|s| s.source().unwrap().xml_range.clone())
+            .collect::<Vec<_>>(),
+        origins
+    );
+    for span in chunk.spans() {
+        assert_eq!(span.font().weight(), 700);
+        assert_eq!(span.font().style(), usvg::FontStyle::Italic);
+    }
+    assert!(
+        Tree::from_data_nested(source.as_bytes(), &options)
+            .unwrap()
+            .root()
+            .children()
+            .is_empty(),
+        "source offsets must not leak into separately loaded SVG documents"
+    );
+    let child = xml.descendants().find(|n| n.has_tag_name("tspan")).unwrap();
+    options.computed_fonts.insert(
+        child.range().start,
+        usvg::ComputedFontStyle {
+            font_size: Some("0px".into()),
+            ..Default::default()
+        },
+    );
+    let tree = Tree::from_str(source, &options).unwrap();
+    let Node::Text(text) = &tree.root().children()[0] else {
+        panic!("text")
+    };
+    assert_eq!(
+        text.chunks()[0].spans().len(),
+        1,
+        "a computed zero size hides only its own occurrence"
+    );
+}
+
+#[test]
 fn resolved_fonts_bind_to_original_occurrences_without_matching_text() {
     let mut fonts = usvg::fontdb::Database::new();
     fonts.load_fonts_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/../resvg/tests/fonts"));

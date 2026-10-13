@@ -18,8 +18,9 @@ impl<'input> Document<'input> {
     pub fn parse_tree(
         xml: &roxmltree::Document<'input>,
         injected_stylesheet: Option<&'input str>,
+        computed_fonts: &'input HashMap<usize, crate::ComputedFontStyle>,
     ) -> Result<Document<'input>, Error> {
-        parse(xml, injected_stylesheet)
+        parse(xml, injected_stylesheet, computed_fonts)
     }
 
     pub(crate) fn append(&mut self, parent_id: NodeId, kind: NodeKind) -> NodeId {
@@ -66,11 +67,13 @@ impl<'input> Document<'input> {
 fn parse<'input>(
     xml: &roxmltree::Document<'input>,
     injected_stylesheet: Option<&'input str>,
+    computed_fonts: &'input HashMap<usize, crate::ComputedFontStyle>,
 ) -> Result<Document<'input>, Error> {
     let mut doc = Document {
         nodes: Vec::new(),
         attrs: Vec::new(),
         links: HashMap::new(),
+        computed_fonts,
     };
 
     // build a map of id -> node for resolve_href
@@ -388,6 +391,27 @@ pub(crate) fn parse_svg_element<'input>(
     if let Some(value) = xml_node.attribute("style") {
         for declaration in simplecss::DeclarationTokenizer::from(value) {
             write_declaration(&declaration);
+        }
+    }
+
+    if let Some(font) = doc.computed_fonts.get(&xml_node.range().start) {
+        for (name, value) in [
+            (AId::FontFamily, &font.font_family),
+            (AId::FontSize, &font.font_size),
+            (AId::FontWeight, &font.font_weight),
+            (AId::FontStyle, &font.font_style),
+        ] {
+            if let Some(value) = value {
+                let value = roxmltree::StringStorage::new_owned(value);
+                if let Some(attr) = doc.attrs[attrs_start_idx..]
+                    .iter_mut()
+                    .find(|a| a.name == name)
+                {
+                    attr.value = value;
+                } else {
+                    doc.append_attribute(name, value, true);
+                }
+            }
         }
     }
 

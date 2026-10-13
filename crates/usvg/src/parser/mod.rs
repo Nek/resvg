@@ -21,7 +21,7 @@ mod text;
 #[cfg(feature = "text")]
 pub(crate) use converter::Cache;
 pub use image::{ImageHrefDataResolverFn, ImageHrefResolver, ImageHrefStringResolverFn};
-pub use options::Options;
+pub use options::{ComputedFontStyle, Options};
 pub(crate) use svgtree::{AId, EId};
 
 /// List of all errors.
@@ -157,7 +157,8 @@ impl crate::Tree {
 
     /// Parses `Tree` from `roxmltree::Document`.
     pub fn from_xmltree(doc: &roxmltree::Document, opt: &Options) -> Result<Self, Error> {
-        let doc = svgtree::Document::parse_tree(doc, opt.style_sheet.as_deref())?;
+        let doc =
+            svgtree::Document::parse_tree(doc, opt.style_sheet.as_deref(), &opt.computed_fonts)?;
         self::converter::convert_doc(&doc, opt)
     }
 }

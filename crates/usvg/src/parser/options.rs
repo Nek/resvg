@@ -8,6 +8,23 @@ use std::sync::Arc;
 use crate::FontResolver;
 use crate::{ImageHrefResolver, ImageRendering, ShapeRendering, Size, TextRendering};
 
+/// Font properties already computed by the caller's CSS cascade.
+///
+/// Values use SVG property syntax. Omitted properties use normal SVG parsing.
+/// These values take precedence over authored and injected declarations; callers
+/// must supply computed (rather than inherited or unresolved variable) values.
+#[derive(Clone, Debug, Default)]
+pub struct ComputedFontStyle {
+    /// The computed font-family list.
+    pub font_family: Option<String>,
+    /// The computed absolute font-size, including its unit.
+    pub font_size: Option<String>,
+    /// The computed font-weight.
+    pub font_weight: Option<String>,
+    /// The computed font-style.
+    pub font_style: Option<String>,
+}
+
 /// Processing options.
 #[derive(Debug)]
 pub struct Options<'a> {
@@ -98,6 +115,12 @@ pub struct Options<'a> {
     /// A CSS stylesheet that should be injected into the SVG. Can be used to overwrite
     /// certain attributes.
     pub style_sheet: Option<String>,
+    /// Computed fonts keyed by the original XML element's starting byte offset.
+    ///
+    /// This input leaves the source and its text ranges unchanged. It applies to
+    /// this document only, not SVG images loaded from separate documents.
+    /// Default: empty (normal SVG/CSS parsing).
+    pub computed_fonts: std::collections::HashMap<usize, ComputedFontStyle>,
 }
 
 impl Default for Options<'_> {
@@ -119,6 +142,7 @@ impl Default for Options<'_> {
             #[cfg(feature = "text")]
             fontdb: Arc::new(fontdb::Database::new()),
             style_sheet: None,
+            computed_fonts: Default::default(),
         }
     }
 }

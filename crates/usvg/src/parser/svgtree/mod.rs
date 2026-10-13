@@ -25,6 +25,7 @@ pub struct Document<'input> {
     nodes: Vec<NodeData>,
     attrs: Vec<Attribute<'input>>,
     links: HashMap<String, NodeId>,
+    computed_fonts: &'input HashMap<usize, crate::ComputedFontStyle>,
 }
 
 impl<'input> Document<'input> {
